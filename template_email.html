@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alerte de Température</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #e7f3df;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 50px auto;
+            background-color: #ffffff;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .header {
+            background-color: #e5aa3d;
+            color: #fff;
+            text-align: center;
+            padding: 20px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .content {
+            padding: 20px;
+        }
+        .content p {
+            font-size: 16px;
+            line-height: 1.5;
+        }
+        .footer {
+            background-color: #e5aa3d;
+            color: #fff;
+            text-align: center;
+            padding: 10px;
+            font-size: 12px;
+        }
+        .button {
+            display: inline-block;
+            background-color: #e5aa3d;
+            color: #fff;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-top: 20px;
+            font-size: 16px;
+        }
+        .button:hover {
+            background-color: #e5aa3d;
+        }
+        .sensor-icon {
+            font-size: 48px;
+            color: #e5aa3d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Alerte de Température! 🥵</h1>
+        </div>
+        <div class="content">
+            <p>Salut [username],</p>
+            <p>Nous avons détecté que votre capteur de température <code>[sensor_name]</code> a décidé de faire monter la température plus haut qu'un barbecue en plein été!</p>
+            <p>La température actuelle est de <strong>[curr_temp]°C</strong>, ce qui dépasse la limite fixée à <strong>[max_temp]°C</strong>.</p>
+            <p>Il est peut-être temps de rappeler à ce capteur qui est le patron, ou du moins, de vérifier ce qui se passe avant que les choses ne deviennent vraiment chaudes.</p>
+            <p>On t'embetera plus avec ce capteur avant le <u>[time_next]</u></p>
+        </div>
+        <div class="footer">
+            <p>Ce message t'es envoyé par l'app Homegar et généré par ChatGPT</p>
+        </div>
+    </div>
+</body>
+</html>

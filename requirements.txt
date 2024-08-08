@@ -1,0 +1,11 @@
+# DO NOT include azure-functions-worker in this file
+# The Python Worker is managed by Azure Functions platform
+# Manually managing azure-functions-worker may cause unexpected issues
+
+azure-functions
+requests>=2.0.0
+PyYAML>=5.0.0
+setuptools>=68.1.2
+platformdirs>=4.2.2
+twilio>=9.2.3
+azure-communication-email>=1.0.0
