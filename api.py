@@ -1,10 +1,11 @@
 import binascii
 import hashlib
 import os
-from dateutil import tz
+import pytz
 from datetime import datetime, timedelta
 from typing import Optional, List
 from azure.communication.email import EmailClient
+import redis
 
 import requests
 
@@ -30,7 +31,7 @@ class HomgarApiException(Exception):
 class HomgarApi:
     def __init__(
             self,
-            auth_cache: Optional[dict] = None,
+            config: Optional[dict] = None,
             api_base_url: str = "https://region3.homgarus.com",
             requests_session: requests.Session = None
     ):
@@ -43,14 +44,20 @@ class HomgarApi:
         :param requests_session: Optional requests lib session to use. New session is created if omitted.
         """
         self.session = requests_session or requests.Session()
-        self.cache = auth_cache or {}
         self.base = api_base_url
+        self.config = config
+        self.redis = self.redis = redis.Redis(
+            host=self.config['redis']['host'], 
+            port=6380, 
+            password=self.config['redis']['acces_key'], 
+            ssl=True
+        )
 
     def _request(self, method, url, with_auth=True, headers=None, **kwargs):
         logger.log(TRACE, "%s %s %s", method, url, kwargs)
         headers = {"lang": "en", "appCode": "1", **(headers or {})}
         if with_auth:
-            headers["auth"] = self.cache["token"]
+            headers["auth"] = self.get_cache("token")
         response = self.session.request(method, url, headers=headers, **kwargs)
         logger.log(TRACE, "-[%03d]-> %s", response.status_code, response.text)
         return response
@@ -81,10 +88,10 @@ class HomgarApi:
             "password": hashlib.md5(password.encode('utf-8')).hexdigest(),
             "deviceId": binascii.b2a_hex(os.urandom(16)).decode('utf-8')
         }, with_auth=False)
-        self.cache['email'] = email
-        self.cache['token'] = data.get('token')
-        self.cache['token_expires'] = datetime.utcnow().timestamp() + data.get('tokenExpired')
-        self.cache['refresh_token'] = data.get('refreshToken')
+        self.set_cache('email',email)
+        self.set_cache('token',data.get('token'))
+        self.set_cache('token_expires',datetime.utcnow().timestamp() + data.get('tokenExpired'))
+        self.set_cache('refresh_token',data.get('refreshToken'))
 
     def get_homes(self) -> List[HomgarHome]:
         """
@@ -168,48 +175,52 @@ class HomgarApi:
         See login() for parameter info.
         """
         if (
-                self.cache.get('email') != email or
-                datetime.fromtimestamp(self.cache.get('token_expires', 0)) - datetime.utcnow() < timedelta(minutes=60)
+                self.get_cache('email') != email or
+                datetime.fromtimestamp(float(self.get_cache('token_expires'))) - datetime.utcnow() < timedelta(minutes=60)
         ):
             self.login(email, password, area_code=area_code)
             
     def is_max_temperature(self, config, subdevice: TemperatureAirSensor, max_temp: int = 34) -> None:
-        curr_temp = subdevice.temp_mk_current*1e-3-273.15     
+        curr_temp = subdevice.temp_mk_current * 1e-3 - 273.15
         subdevice.set_max_temperature(config)
         subdevice.set_alert_frequency(config)
-        
-        if(curr_temp >= subdevice.max_temperature):
-            body = f"ALERTE ! 🥵 La température du capteur \"{self.remove_last_space(subdevice.name)}\" est a {round(curr_temp,1)}° pour une limite à {subdevice.max_temperature}°."
-            logger.warning(f"    + {body}")
-            
-            FRA = tz.gettz('Europe/Paris')
-            # check if alert was already triggered in last frequency defined in config
-            if (self.cache.get(f"alert_{subdevice.did}_time_next") is None or 
-                datetime.now(FRA) > self.cache[f"alert_{subdevice.did}_time_next"]
-            ):
-                # update cache values
-                self.cache[f"alert_{subdevice.did}_time"] = datetime.now(FRA)
-                self.cache[f"alert_{subdevice.did}_curr_temp"] = curr_temp
-                self.cache[f"alert_{subdevice.did}_max_temp"] = subdevice.max_temperature
-                self.cache[f"alert_{subdevice.did}_time_next"] = datetime.now(FRA) + timedelta(hours=subdevice.alert_frequency)
-                # Add next notification time
-                formatted_time_next_alert = self.cache[f"alert_{subdevice.did}_time_next"].strftime("%d/%m %H:%M")
 
+        if curr_temp >= subdevice.max_temperature:
+            body = f"ALERTE ! 🥵 La température du capteur \"{self.remove_last_space(subdevice.name)}\" est à {round(curr_temp, 1)}° pour une limite à {subdevice.max_temperature}°."
+            logger.warning(f"    + {body}")
+
+            # Obtenir l'heure actuelle en France
+            timezone = pytz.timezone('Europe/Paris')
+            current_time_in_fra = datetime.now(timezone)
+            
+            # Vérifier si l'alerte doit être déclenchée à nouveau
+            last_alert_time = self.get_cache(f"alert_{subdevice.did}_time_next")
+            if last_alert_time is None or current_time_in_fra > timezone.localize(datetime.strptime(last_alert_time, '%Y-%m-%d %H:%M:%S')):
+                # Mise à jour du cache
+                self.set_cache(f"alert_{subdevice.did}_time", current_time_in_fra.strftime('%Y-%m-%d %H:%M:%S'))
+                self.set_cache(f"alert_{subdevice.did}_curr_temp", curr_temp)
+                self.set_cache(f"alert_{subdevice.did}_max_temp", subdevice.max_temperature)
+                
+                # Calcul du prochain temps d'alerte
+                time_next = current_time_in_fra + timedelta(hours=subdevice.alert_frequency)
+                self.set_cache(f"alert_{subdevice.did}_time_next", time_next.strftime('%Y-%m-%d %H:%M:%S'))
+
+                # Envoyer l'alerte
+                formatted_time_next_alert = time_next.strftime("%d/%m %H:%M")
                 line = f"Vous ne recevrez plus d'alerte pour ce capteur avant le {formatted_time_next_alert}."
-                # Lire le contenu du fichier HTML
+                
                 with open('template_email.html', 'r', encoding='utf-8') as file:
                     html_template = file.read()
                 
-                # Remplacer les placeholders par les valeurs réelles
                 html_content = html_template.replace('[username]', "Franz")
                 html_content = html_content.replace('[sensor_name]', self.remove_last_space(subdevice.name))
-                html_content = html_content.replace('[curr_temp]', str(round(curr_temp,1)))
+                html_content = html_content.replace('[curr_temp]', str(round(curr_temp, 1)))
                 html_content = html_content.replace('[max_temp]', str(subdevice.max_temperature))
                 html_content = html_content.replace('[time_next]', formatted_time_next_alert)
-                # send the alert
-                self.send_mail(config,"florian.congre@gmail.com",html_content)      
+                
+                self.send_mail(config, "florian.congre@gmail.com", html_content)
             else:
-                formatted_time_next_alert = self.cache[f"alert_{subdevice.did}_time_next"].strftime("%d/%m %H:%M")
+                formatted_time_next_alert = datetime.strptime(last_alert_time, '%Y-%m-%d %H:%M:%S').strftime("%d/%m %H:%M")
                 logger.info(f"    + Pas d'envoi d'alerte pour ce capteur avant le {formatted_time_next_alert}")
                    
     def remove_last_space(self,s) -> str:
@@ -237,4 +248,22 @@ class HomgarApi:
 
         poller = client.begin_send(message)
         result = poller.result()
-        
+    
+    def set_cache(self, key, value, expire_seconds: Optional[int] = None) -> None:
+        """
+        Stocke une valeur dans Redis. La valeur est automatiquement convertie en chaîne JSON.
+        Une expiration peut être spécifiée pour supprimer automatiquement l'entrée après un certain temps.
+        """
+        if expire_seconds:
+            self.redis.setex(key, expire_seconds, value)
+        else:
+            self.redis.set(key, value)
+
+    def get_cache(self, key):
+        """
+        Récupère une valeur de Redis et la décode à partir du format JSON.
+        """
+        value = self.redis.get(key)
+        if value is not None:
+            return value.decode('utf-8')
+        return None
