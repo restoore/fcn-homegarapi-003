@@ -1,6 +1,3 @@
-Voici un exemple de fichier `README.md` en Markdown pour un dépôt GitHub basé sur les classes et le code que vous avez fournis.
-
-```markdown
 # Homgar API Integration
 
 This project provides an integration with the Homgar API, allowing you to monitor and manage devices associated with your Homgar account. The code is designed to run as an Azure Function, triggered by a timer, which periodically checks the status of devices and sends alerts when necessary.
@@ -135,16 +132,3 @@ Please make sure to update tests as appropriate.
 ## License
 
 This project is licensed under the MIT License. See the `LICENSE` file for details.
-```
-
-### Summary:
-
-- **Overview**: Provides a summary of what the project does, including its key features.
-- **Installation**: Guides the user on how to clone the repository and install dependencies.
-- **Configuration**: Explains how to set up the `config.yml` file with necessary credentials.
-- **Usage**: Instructions on how to run the application locally or deploy it to Azure.
-- **Logging**: Describes the logging setup and how to configure it.
-- **Contributing**: Offers guidelines on how to contribute to the project.
-- **License**: States the licensing under which the project is distributed.
-
-This `README.md` should serve as a comprehensive guide for users and developers interacting with your project.
