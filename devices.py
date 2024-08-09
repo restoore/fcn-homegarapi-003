@@ -345,12 +345,12 @@ class TemperatureAirSensor(HomgarSubDevice):
     def set_max_temperature(self, config) -> None:
         for sensor in config['sensors']:
             if sensor['name'] == self.name:
-                self.max_temperature = sensor['max_temperature']
+                self.max_temperature = sensor['max-temperature']
     
     def set_alert_frequency(self, config) -> None:
         for sensor in config['sensors']:
             if sensor['name'] == self.name:
-                self.alert_frequency = sensor['alert_frequency']
+                self.alert_frequency = sensor['alert-frequency']
             
 class RainPointAirSensor(HomgarSubDevice):
     MODEL_CODES = [262]
