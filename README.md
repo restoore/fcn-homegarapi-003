@@ -21,7 +21,7 @@ The integration is structured into two main components:
 
 ### Features
 
-- **Scheduled Execution**: The Azure Function is scheduled to run every minute to ensure timely updates.
+- **Scheduled Execution**: The Azure Function is scheduled to run 30 minutes to ensure timely updates.
 - **Temperature Monitoring**: The system checks if the temperature of connected devices exceeds a predefined threshold and sends an email alert if necessary.
 - **Logging**: Extensive logging is implemented to track the flow of operations and handle errors effectively.
 
@@ -36,8 +36,8 @@ The integration is structured into two main components:
 ### Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/homgar-api-integration.git
-cd homgar-api-integration
+git clone https://github.com/restoore/fcn-homegarapi-003.git
+cd fcn-homegarapi-003
 ```
 
 ### Install Dependencies
@@ -56,6 +56,7 @@ The application requires a configuration file named `config.yml` at the root of 
 
 ### Example `config.yml`
 
+Rename `config.sample.yml` to `config.yml`
 ```yaml
 api-homegar:
   email: "your-email@example.com"
@@ -63,24 +64,24 @@ api-homegar:
 
 redis:
   host: "your-redis-host"
-  acces_key: "your-redis-access-key"
+  acces-key: "your-redis-access-key"
 
 azure-mail:
   connection-string: "your-azure-connection-string"
   sender: "sender-email@example.com"
 
 # Param pour les capteurs : température max à surveiller, cadence des alertes en heure
-# exemple si alert_frequency est fixé à 24, la notification ne sera envoyée qu'une fois toutes les 24h en cas de dépassement
+# exemple si alert-frequency est fixé à 24, la notification ne sera envoyée qu'une fois toutes les 24h en cas de dépassement
 sensors:
   - name: 'extérieur '
-    max_temperature: 40
-    alert_frequency: 24
+    max-temperature: 40
+    alert-frequency: 24
   - name: 'cage '
-    max_temperature: 25
-    alert_frequency: 2
+    max-temperature: 25
+    alert-frequency: 2
   - name: 'congélo '
-    max_temperature: -10
-    alert_frequency: 24
+    max-temperature: -10
+    alert-frequency: 24
 ```
 
 ## Usage

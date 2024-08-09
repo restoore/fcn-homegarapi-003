@@ -1,19 +1,19 @@
-api:
+api-homegar:
   email: '<login>'
   password: '<password>'
 
 # Param pour les capteurs : température max à surveiller, cadence des alertes en heure
-# exemple si alert_frequency est fixé à 24, la notification ne sera envoyée qu'une fois toutes les 24h en cas de dépassement
+# exemple si alert-frequency est fixé à 24, la notification ne sera envoyée qu'une fois toutes les 24h en cas de dépassement
 sensors:
   - name: 'extérieur '
-    max_temperature: 40
-    alert_frequency: 24
+    max-temperature: 40
+    alert-frequency: 24
   - name: 'cage '
-    max_temperature: 25
-    alert_frequency: 18
+    max-temperature: 25
+    alert-frequency: 18
   - name: 'congélo '
-    max_temperature: -10
-    alert_frequency: 24
+    max-temperature: -10
+    alert-frequency: 24
 
 azure-mail:
   connection-string: '<Azure communication email connection string>'
