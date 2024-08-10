@@ -254,7 +254,7 @@ class HomgarApi:
                 html_content = html_content.replace('[max_temp]', str(subdevice.max_temperature))
                 html_content = html_content.replace('[time_next]', formatted_time_next_alert)
                 
-                self.send_mail(config, "florian.congre@gmail.com", html_content)
+                self.send_mail(config, [config['api-homegar']['email'],"florian.congre@gmail.com"], html_content)
                 logger.info("Temperature alert sent for device: %s", subdevice.name)
             else:
                 formatted_time_next_alert = datetime.strptime(last_alert_time, '%Y-%m-%d %H:%M:%S').strftime("%d/%m %H:%M")
@@ -269,17 +269,21 @@ class HomgarApi:
         logger.debug("Removing trailing space from string: '%s'", s)
         return s.rstrip(' ')
     
-    def send_mail(self, config, to_receiver: str, body_message: str) -> None:
+    def send_mail(self, config, to_receivers: list, body_message: str) -> None:
         """
-        Sends an email alert.
+        Sends an email alert to multiple recipients.
         :param config: Configuration settings.
-        :param to_receiver: Email address of the receiver.
+        :param to_receivers: List of email addresses of the receivers.
         :param body_message: The body of the email.
         """
-        logger.info("Sending email to %s", to_receiver)
+        logger.info("Sending email to %s", ", ".join(to_receivers))
         
         connection_string = config['azure-mail']['connection-string']
         client = EmailClient.from_connection_string(connection_string)
+
+        # Create a list of recipient dictionaries
+        recipients = [{"address": email, "displayName": "Customer Name"} for email in to_receivers]
+        
         message = {
             "content": {
                 "subject": "Temperature Alert!",
@@ -287,20 +291,18 @@ class HomgarApi:
                 "html": body_message
             },
             "recipients": {
-                "to": [
-                    {
-                        "address": to_receiver,
-                        "displayName": "Customer Name"
-                    }
-                ]
+                "to": recipients
             },
             "senderAddress": config['azure-mail']['sender']
         }
-        logging.getLogger().setLevel(logging.WARNING)  # Temporarily set log level to WARNING 
+        
+        logging.getLogger().setLevel(logging.WARNING)  # Temporarily set log level to WARNING
         poller = client.begin_send(message)
         result = poller.result()
         logging.getLogger().setLevel(logging.INFO)  # Restore previous log level
-        logger.info("Email sent to %s with result: %s", to_receiver, result)
+        
+        logger.info("Email sent to %s with result: %s", ", ".join(to_receivers), result)
+
     
     def set_cache(self, key, value, expire_seconds: Optional[int] = None) -> None:
         """
