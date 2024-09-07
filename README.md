@@ -62,6 +62,12 @@ api-homegar:
   email: "your-email@example.com"
   password: "your-password"
 
+notification:
+  - to: 'user1@example.com'
+    displayName: 'User One'
+  - to: 'user2@example.com'
+    displayName: 'User Two'
+
 redis:
   host: "your-redis-host"
   acces-key: "your-redis-access-key"
