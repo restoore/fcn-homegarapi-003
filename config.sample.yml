@@ -18,3 +18,13 @@ sensors:
 azure-mail:
   connection-string: '<Azure communication email connection string>'
   sender: '<email sender address>'
+
+notification:
+  - to: 'user1@example.com'
+    displayName: 'User One'
+  - to: 'user2@example.com'
+    displayName: 'User Two'
+
+redis:
+  host: 'example-redis.cache.windows.net'
+  access-key: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
