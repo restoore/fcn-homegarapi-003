@@ -139,8 +139,6 @@ class HomgarApi:
         hubs = []
 
         def device_base_props(dev_data):
-            # backup device name in cache
-            self.set_cache(f"alert_{dev_data.get('did')}_name",dev_data.get('name'))
             return dict(
                 model=dev_data.get('model'),
                 model_code=dev_data.get('modelCode'),
@@ -196,6 +194,12 @@ class HomgarApi:
             device = id_map.get(subdevice_status['id'])
             if device is not None:
                 device.set_device_status(subdevice_status)
+                # backup device name in cache
+                self.set_cache(f"alert_{device.did}_name",device.name)
+                # set current temp in cache
+                if device.temp_mk_current is not None:
+                    curr_temp = device.temp_mk_current * 1e-3 - 273.15
+                    self.set_cache(f"alert_{device.did}_curr_temp", curr_temp)
         logger.info("Device status updated for hub ID: %s", hub.mid)
 
     def ensure_logged_in(self, email: str, password: str, area_code: str = "31") -> None:
