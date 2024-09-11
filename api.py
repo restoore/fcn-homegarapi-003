@@ -11,6 +11,8 @@ from devices import HomgarHome, MODEL_CODE_MAPPING, HomgarHubDevice, Temperature
 from logutil import TRACE, get_logger, logging
 
 logger = get_logger(__file__)
+timezone = pytz.timezone('Europe/Paris')
+current_time_in_fra = datetime.now(timezone)
 
 class HomgarApiException(Exception):
     def __init__(self, code, msg):
@@ -194,8 +196,9 @@ class HomgarApi:
             device = id_map.get(subdevice_status['id'])
             if device is not None:
                 device.set_device_status(subdevice_status)
-                # backup device name in cache
+                # backup device name and time in cache
                 self.set_cache(f"alert_{device.did}_name",device.name)
+                self.set_cache(f"alert_{device.did}_time",current_time_in_fra.strftime('%Y-%m-%d %H:%M:%S'))
                 # set current temp in cache
                 if device.temp_mk_current is not None:
                     curr_temp = device.temp_mk_current * 1e-3 - 273.15
@@ -244,10 +247,7 @@ class HomgarApi:
         if curr_temp >= subdevice.max_temperature:
             body = f"ALERT! 🥵 The temperature of sensor \"{self.remove_last_space(subdevice.name)}\" is {round(curr_temp, 1)}° with a limit of {subdevice.max_temperature}°."
             logger.warning(f"    + {body}")
-
-            timezone = pytz.timezone('Europe/Paris')
-            current_time_in_fra = datetime.now(timezone)
-            
+                        
             last_alert_time = self.get_cache(f"alert_{subdevice.did}_time_next")
             if last_alert_time is None or current_time_in_fra > timezone.localize(datetime.strptime(last_alert_time, '%Y-%m-%d %H:%M:%S')):
                 self.set_cache(f"alert_{subdevice.did}_time", current_time_in_fra.strftime('%Y-%m-%d %H:%M:%S'))
