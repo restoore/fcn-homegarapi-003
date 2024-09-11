@@ -139,6 +139,8 @@ class HomgarApi:
         hubs = []
 
         def device_base_props(dev_data):
+            # backup device name in cache
+            self.set_cache(f"alert_{dev_data.get('did')}_name",dev_data.get('name'))
             return dict(
                 model=dev_data.get('model'),
                 model_code=dev_data.get('modelCode'),
@@ -221,6 +223,15 @@ class HomgarApi:
         :param subdevice: The temperature sensor device to check.
         :param max_temp: Maximum temperature threshold.
         """
+        
+        # Vérifier si les alertes sont activées pour ce device
+        alert_enabled_key = f"alert_{subdevice.did}_enabled"
+        alert_enabled = self.get_cache(alert_enabled_key)
+
+        if alert_enabled != '1':  # Vérifier si la valeur de 'alert_*_enabled' est 1
+            logger.info(f"Alerts are disabled for device {subdevice.name}. Skipping temperature check.")
+            return
+        
         curr_temp = subdevice.temp_mk_current * 1e-3 - 273.15
         logger.info("Checking max temperature for device %s, current: %.2f, max allowed: %d", subdevice.name, curr_temp, max_temp)
         subdevice.set_max_temperature(config)
