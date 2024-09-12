@@ -37,6 +37,7 @@ class HomgarDevice:
         self.model = model
         self.model_code = model_code
         self.name = name
+        self.alert_name = name
         self.did = did  # the unique device identifier of this device itself
         self.mid = mid  # the unique identifier of the sensor network
         self.alerts = alerts
@@ -321,8 +322,13 @@ class TemperatureAirSensor(HomgarSubDevice):
         self.hum_daily_max = None
         self.hum_daily_min = None
         self.hum_trend = None
-        self.max_temperature = None
-        self.alert_frequency = None
+        self.alert_temp_max = 1
+        self.alert_frequency = 1
+        self.alert_enabled = '1'
+        self.alert_last_check = None
+        self.alert_next_check = None
+        self.alert_last_trigger = None
+        self.alert_temp_curr = None
 
     def _parse_device_specific_status_d_value(self, s):
         """
@@ -341,16 +347,6 @@ class TemperatureAirSensor(HomgarSubDevice):
         if self.temp_mk_current:
             s += f": {self.temp_mk_current*1e-3-273.15:.1f}°C / {self.hum_current}%"
         return s
-    
-    def set_max_temperature(self, config) -> None:
-        for sensor in config['sensors']:
-            if sensor['name'] == self.name:
-                self.max_temperature = sensor['max-temperature']
-    
-    def set_alert_frequency(self, config) -> None:
-        for sensor in config['sensors']:
-            if sensor['name'] == self.name:
-                self.alert_frequency = sensor['alert-frequency']
             
 class RainPointAirSensor(HomgarSubDevice):
     MODEL_CODES = [262]

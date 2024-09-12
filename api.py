@@ -141,8 +141,6 @@ class HomgarApi:
         hubs = []
 
         def device_base_props(dev_data):
-            # backup device name in cache
-            self.set_cache(f"alert_{dev_data.get('did')}_name",dev_data.get('name'))
             return dict(
                 model=dev_data.get('model'),
                 model_code=dev_data.get('modelCode'),
@@ -198,13 +196,6 @@ class HomgarApi:
             device = id_map.get(subdevice_status['id'])
             if device is not None:
                 device.set_device_status(subdevice_status)
-                # backup device name and time in cache
-                self.set_cache(f"alert_{device.did}_name",device.name)
-                self.set_cache(f"alert_{device.did}_time",current_time_in_fra.strftime('%Y-%m-%d %H:%M:%S'))
-                # set current temp in cache
-                if device.temp_mk_current is not None:
-                    curr_temp = device.temp_mk_current * 1e-3 - 273.15
-                    self.set_cache(f"alert_{device.did}_curr_temp", curr_temp)
         logger.info("Device status updated for hub ID: %s", hub.mid)
 
     def ensure_logged_in(self, email: str, password: str, area_code: str = "31") -> None:
@@ -225,7 +216,31 @@ class HomgarApi:
         else:
             logger.info("Already logged in with valid credentials")
 
-    def is_max_temperature(self, config, subdevice: TemperatureAirSensor, max_temp: int = 34) -> None:
+    def init_sensor(self, subdevice: TemperatureAirSensor):
+       # Itérer sur tous les attributs de l'objet
+        for attr_name, attr_value in subdevice.__dict__.items():
+            # Filtrer uniquement les attributs qui commencent par 'alert_'
+            if attr_name.startswith('alert_'):
+                # Construire la clé Redis en ajoutant l'ID devant le nom de la clé
+                redis_key = f"{subdevice.did}_{attr_name}"
+                attr_value = self.get_cache(redis_key) if self.get_cache(redis_key) is not None else attr_value
+                setattr(subdevice, attr_name, attr_value)
+                
+    def save_sensor(self, subdevice: TemperatureAirSensor):
+        # Itérer sur tous les attributs de l'objet
+        for attr_name, attr_value in subdevice.__dict__.items():
+            # Filtrer uniquement les attributs qui commencent par 'alert_'
+            if attr_name.startswith('alert_'):
+                # Construire la clé Redis en ajoutant l'ID devant le nom de la clé
+                redis_key = f"{subdevice.did}_{attr_name}"
+                # Sauvegarder dans Redis
+                if attr_value is not None:
+                    self.set_cache(redis_key, attr_value)
+                else:
+                    self.set_cache(redis_key, "")
+
+    
+    def is_max_temperature(self, config, subdevice: TemperatureAirSensor) -> None:
         """
         Checks if the current temperature exceeds the maximum and sends an alert if necessary.
         :param config: Configuration settings.
@@ -233,48 +248,42 @@ class HomgarApi:
         :param max_temp: Maximum temperature threshold.
         """
         
-        # Vérifier si les alertes sont activées pour ce device
-        alert_enabled_key = f"alert_{subdevice.did}_enabled"
-        alert_enabled = self.get_cache(alert_enabled_key)
-
-        if alert_enabled != '1':  # Vérifier si la valeur de 'alert_*_enabled' est 1
+        subdevice.alert_last_check = current_time_in_fra.strftime('%Y-%m-%d %H:%M:%S')
+        subdevice.alert_temp_curr = subdevice.temp_mk_current * 1e-3 - 273.15
+        
+        if subdevice.alert_enabled != 'on':  # Vérifier si la valeur de 'alert_*_enabled' est 1
             logger.info(f"Alerts are disabled for device {subdevice.name}. Skipping temperature check.")
             return
         
         curr_temp = subdevice.temp_mk_current * 1e-3 - 273.15
-        logger.info("Checking max temperature for device %s, current: %.2f, max allowed: %d", subdevice.name, curr_temp, max_temp)
-        subdevice.set_max_temperature(config)
-        subdevice.set_alert_frequency(config)
-
-        if curr_temp >= subdevice.max_temperature:
-            body = f"ALERT! 🥵 The temperature of sensor \"{self.remove_last_space(subdevice.name)}\" is {round(curr_temp, 1)}° with a limit of {subdevice.max_temperature}°."
+        alert_temp_max = int(subdevice.alert_temp_max)
+        logger.info("Checking max temperature for device %s, current: %.2f, max allowed: %s", subdevice.name, subdevice.alert_temp_curr, subdevice.alert_temp_max)
+        
+        if curr_temp >= alert_temp_max:
+            body = f"ALERT! 🥵 The temperature of sensor \"{self.remove_last_space(subdevice.name)}\" is {round(subdevice.alert_temp_curr, 1)}° with a limit of {subdevice.alert_temp_max}°."
             logger.warning(f"    + {body}")
-                        
-            last_alert_time = self.get_cache(f"alert_{subdevice.did}_time_next")
-            if last_alert_time is None or current_time_in_fra > timezone.localize(datetime.strptime(last_alert_time, '%Y-%m-%d %H:%M:%S')):
-                self.set_cache(f"alert_{subdevice.did}_time", current_time_in_fra.strftime('%Y-%m-%d %H:%M:%S'))
-                self.set_cache(f"alert_{subdevice.did}_curr_temp", curr_temp)
-                self.set_cache(f"alert_{subdevice.did}_max_temp", subdevice.max_temperature)
-                
+
+            if subdevice.alert_next_check is None or current_time_in_fra > timezone.localize(datetime.strptime(subdevice.alert_next_check, '%Y-%m-%d %H:%M:%S')):
+                              
                 time_next = current_time_in_fra + timedelta(hours=subdevice.alert_frequency)
-                self.set_cache(f"alert_{subdevice.did}_time_next", time_next.strftime('%Y-%m-%d %H:%M:%S'))
+                self.set_cache(f"{subdevice.did}_alert_next_check", time_next.strftime('%Y-%m-%d %H:%M:%S'))
 
                 formatted_time_next_alert = time_next.strftime("%d/%m %H:%M")
-                line = f"No further alerts for this sensor until {formatted_time_next_alert}."
-                
                 with open('template_email.html', 'r', encoding='utf-8') as file:
                     html_template = file.read()
                 
                 html_content = html_template.replace('[username]', "Franz")
                 html_content = html_content.replace('[sensor_name]', self.remove_last_space(subdevice.name))
-                html_content = html_content.replace('[curr_temp]', str(round(curr_temp, 1)))
-                html_content = html_content.replace('[max_temp]', str(subdevice.max_temperature))
+                html_content = html_content.replace('[curr_temp]', str(round(subdevice.alert_temp_curr, 1)))
+                html_content = html_content.replace('[max_temp]', str(subdevice.alert_temp_max))
                 html_content = html_content.replace('[time_next]', formatted_time_next_alert)
                 
                 self.send_mail(config, html_content)
                 logger.info("Temperature alert sent for device: %s", subdevice.name)
+                line = f"No further alerts for this sensor until {formatted_time_next_alert}."
+                logger.info(line)
             else:
-                formatted_time_next_alert = datetime.strptime(last_alert_time, '%Y-%m-%d %H:%M:%S').strftime("%d/%m %H:%M")
+                formatted_time_next_alert = datetime.strptime(subdevice.alert_next_check, '%Y-%m-%d %H:%M:%S').strftime("%d/%m %H:%M")
                 logger.info("No alert sent; next alert possible after %s", formatted_time_next_alert)
                    
     def remove_last_space(self, s) -> str:
@@ -322,8 +331,6 @@ class HomgarApi:
 
         logger.info("Email sent to %s with result: %s", ", ".join([recipient['to'] for recipient in to_receivers]), result)
 
-
-    
     def set_cache(self, key, value, expire_seconds: Optional[int] = None) -> None:
         """
         Stores a value in Redis with an optional expiration.

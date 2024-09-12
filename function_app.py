@@ -87,10 +87,13 @@ def run(api: HomgarApi, config):
                 # Check each subdevice for temperature and log the results
                 for subdevice in hub.subdevices:
                     logger.info(f"    + Processing subdevice: {subdevice}")
-                    
+                    logger.info(f"    + Initialize subdevice: {subdevice}")
+                    api.init_sensor(subdevice)
                     # Check if the current temperature exceeds the maximum and handle it
                     logger.info(f"    + Checking max temperature for subdevice {subdevice.name}...")
                     api.is_max_temperature(config, subdevice)
+                    logger.info(f"    + Save in cache redis subdevice: {subdevice}")
+                    api.save_sensor(subdevice)
                     logger.debug(f"    + Max temperature checked for subdevice {subdevice.name}")
 
     except Exception as e:
