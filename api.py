@@ -141,6 +141,8 @@ class HomgarApi:
         hubs = []
 
         def device_base_props(dev_data):
+            # backup device name in cache
+            self.set_cache(f"alert_{dev_data.get('did')}_name",dev_data.get('name'))
             return dict(
                 model=dev_data.get('model'),
                 model_code=dev_data.get('modelCode'),
