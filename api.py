@@ -12,7 +12,6 @@ from logutil import TRACE, get_logger, logging
 
 logger = get_logger(__file__)
 timezone = pytz.timezone('Europe/Paris')
-current_time_in_fra = datetime.now(timezone)
 
 class HomgarApiException(Exception):
     def __init__(self, code, msg):
@@ -247,12 +246,13 @@ class HomgarApi:
         :param subdevice: The temperature sensor device to check.
         :param max_temp: Maximum temperature threshold.
         """
+        current_time_in_fra = datetime.now(timezone)
         
         subdevice.alert_last_check = current_time_in_fra.strftime('%Y-%m-%d %H:%M:%S')
         subdevice.alert_temp_curr = subdevice.temp_mk_current * 1e-3 - 273.15
         
         if subdevice.alert_enabled != 'on':  # Vérifier si la valeur de 'alert_*_enabled' est 1
-            logger.info(f"Alerts are disabled for device {subdevice.name}. Skipping temperature check.")
+            logger.info(f"+ Alerts are disabled for device {subdevice.name}. Skipping temperature check.")
             return
         
         curr_temp = subdevice.temp_mk_current * 1e-3 - 273.15

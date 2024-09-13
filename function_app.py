@@ -94,7 +94,5 @@ def run(api: HomgarApi, config):
                     api.is_max_temperature(config, subdevice)
                     logger.info(f"    + Save in cache redis subdevice: {subdevice}")
                     api.save_sensor(subdevice)
-                    logger.debug(f"    + Max temperature checked for subdevice {subdevice.name}")
-
     except Exception as e:
         logger.error(f"An error occurred in the run function: {str(e)}")
