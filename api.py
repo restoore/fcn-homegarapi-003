@@ -265,7 +265,7 @@ class HomgarApi:
 
             if subdevice.alert_next_check is None or current_time_in_fra > timezone.localize(datetime.strptime(subdevice.alert_next_check, '%Y-%m-%d %H:%M:%S')):
                               
-                time_next = current_time_in_fra + timedelta(hours=subdevice.alert_frequency)
+                time_next = current_time_in_fra + timedelta(hours=int(subdevice.alert_frequency))
                 self.set_cache(f"{subdevice.did}_alert_next_check", time_next.strftime('%Y-%m-%d %H:%M:%S'))
 
                 formatted_time_next_alert = time_next.strftime("%d/%m %H:%M")
