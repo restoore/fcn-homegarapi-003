@@ -322,9 +322,9 @@ class TemperatureAirSensor(HomgarSubDevice):
         self.hum_daily_max = None
         self.hum_daily_min = None
         self.hum_trend = None
-        self.alert_temp_max = 1
-        self.alert_frequency = 1
-        self.alert_enabled = '1'
+        self.alert_temp_max = 25
+        self.alert_frequency = 24
+        self.alert_enabled = True
         self.alert_last_check = None
         self.alert_next_check = None
         self.alert_last_trigger = None

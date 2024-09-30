@@ -6,6 +6,8 @@ from datetime import datetime, timedelta
 from typing import Optional, List
 from azure.communication.email import EmailClient
 import redis
+from psycopg2 import sql
+import psycopg2
 import requests
 from devices import HomgarHome, MODEL_CODE_MAPPING, HomgarHubDevice, TemperatureAirSensor
 from logutil import TRACE, get_logger, logging
@@ -49,6 +51,16 @@ class HomgarApi:
             password=self.config['redis']['acces-key'], 
             ssl=True
         )
+        logger.info("Initialized HomgarApi with base URL: %s", self.base)
+        # Initialisation de la connexion PostgreSQL
+        self.conn = psycopg2.connect(
+            host=self.config['postgres']['host'],
+            port=self.config['postgres']['port'],
+            dbname='homegar',
+            user='homegarapi',
+            password=self.config['postgres']['password']
+        )
+        self.cursor = self.conn.cursor()
         logger.info("Initialized HomgarApi with base URL: %s", self.base)
 
     def _request(self, method, url, with_auth=True, headers=None, **kwargs):
@@ -216,14 +228,44 @@ class HomgarApi:
             logger.info("Already logged in with valid credentials")
 
     def init_sensor(self, subdevice: TemperatureAirSensor):
-       # Itérer sur tous les attributs de l'objet
-        for attr_name, attr_value in subdevice.__dict__.items():
-            # Filtrer uniquement les attributs qui commencent par 'alert_'
-            if attr_name.startswith('alert_'):
-                # Construire la clé Redis en ajoutant l'ID devant le nom de la clé
-                redis_key = f"{subdevice.did}_{attr_name}"
-                attr_value = self.get_cache(redis_key) if self.get_cache(redis_key) is not None else attr_value
-                setattr(subdevice, attr_name, attr_value)
+        """
+        Initialize the sensor by loading its settings from the database.
+        """
+        select_query = """
+        SELECT alert_temp_max, alert_frequency, alert_enabled, alert_next_check
+        FROM device
+        WHERE did = %s;
+        """
+        self.cursor.execute(select_query, (subdevice.did,))
+        result = self.cursor.fetchone()
+        if result:
+            (
+                subdevice.alert_temp_max,
+                subdevice.alert_frequency,
+                subdevice.alert_enabled,
+                subdevice.alert_next_check
+            ) = result
+            logger.info("Loaded sensor settings from database for device ID: %s", subdevice.did)
+        else:
+            # Si le capteur n'existe pas encore dans la base, l'insérer avec les valeurs par défaut
+            insert_query = """
+            INSERT INTO device (did, addr, name, model, modelcode, alert_temp_max, alert_frequency, alert_enabled, alert_next_check)
+            VALUES (%s, %s, %s, %s,%s, %s, %s, %s, %s);
+            """
+            self.cursor.execute(insert_query, (
+                subdevice.did,
+                subdevice.address,
+                subdevice.name,
+                subdevice.model,
+                subdevice.model_code,
+                subdevice.alert_temp_max,
+                subdevice.alert_frequency,
+                subdevice.alert_enabled,
+                subdevice.alert_next_check
+            ))
+            self.conn.commit()
+            logger.info("Inserted new sensor into database with default settings for device ID: %s", subdevice.did)
+
                 
     def save_sensor(self, subdevice: TemperatureAirSensor):
         # Itérer sur tous les attributs de l'objet
@@ -251,7 +293,11 @@ class HomgarApi:
         subdevice.alert_last_check = current_time_in_fra.strftime('%Y-%m-%d %H:%M:%S')
         subdevice.alert_temp_curr = subdevice.temp_mk_current * 1e-3 - 273.15
         
-        if subdevice.alert_enabled != 'on':  # Vérifier si la valeur de 'alert_*_enabled' est 1
+        # Enregistrer le relevé de température dans la table 'history'
+        alert_triggered = False
+        alert_message = None
+        
+        if subdevice.alert_enabled != True:  # Vérifier si la valeur de 'alert_*_enabled' est 1
             logger.info(f"+ Alerts are disabled for device {subdevice.name}. Skipping temperature check.")
             return
         
@@ -260,6 +306,7 @@ class HomgarApi:
         logger.info("Checking max temperature for device %s, current: %.2f, max allowed: %s", subdevice.name, subdevice.alert_temp_curr, subdevice.alert_temp_max)
         
         if curr_temp >= alert_temp_max:
+            alert_triggered = True
             body = f"ALERT! 🥵 The temperature of sensor \"{self.remove_last_space(subdevice.name)}\" is {round(subdevice.alert_temp_curr, 1)}° with a limit of {subdevice.alert_temp_max}°."
             logger.warning(f"    + {body}")
 
@@ -267,6 +314,18 @@ class HomgarApi:
                               
                 time_next = current_time_in_fra + timedelta(hours=int(subdevice.alert_frequency))
                 self.set_cache(f"{subdevice.did}_alert_next_check", time_next.strftime('%Y-%m-%d %H:%M:%S'))
+                
+                update_query = """
+                UPDATE device
+                SET alert_next_check = %s
+                WHERE did = %s;
+                """
+                self.cursor.execute(update_query, (
+                    time_next,
+                    subdevice.did
+                ))
+                self.conn.commit()
+                logger.info("Saved sensor settings to database for device ID: %s", subdevice.did)
 
                 formatted_time_next_alert = time_next.strftime("%d/%m %H:%M")
                 with open('template_email.html', 'r', encoding='utf-8') as file:
@@ -278,14 +337,29 @@ class HomgarApi:
                 html_content = html_content.replace('[max_temp]', str(subdevice.alert_temp_max))
                 html_content = html_content.replace('[time_next]', formatted_time_next_alert)
                 
-                self.send_mail(config, html_content)
+                #self.send_mail(config, html_content)
                 logger.info("Temperature alert sent for device: %s", subdevice.name)
                 line = f"No further alerts for this sensor until {formatted_time_next_alert}."
                 logger.info(line)
             else:
                 formatted_time_next_alert = datetime.strptime(subdevice.alert_next_check, '%Y-%m-%d %H:%M:%S').strftime("%d/%m %H:%M")
                 logger.info("No alert sent; next alert possible after %s", formatted_time_next_alert)
-                   
+        
+        # Enregistrer le relevé dans la table 'history'
+        insert_query = """
+        INSERT INTO history (did, timestamp, temperature, alert_triggered, alert_temp_max, alert_message)
+        VALUES (%s, %s, %s, %s, %s, %s);
+        """
+        self.cursor.execute(insert_query, (
+            subdevice.did,
+            current_time_in_fra,
+            subdevice.alert_temp_curr,
+            alert_triggered,
+            alert_temp_max,
+            alert_message
+        ))
+        self.conn.commit()
+        logger.info("Temperature reading recorded in history for device ID: %s", subdevice.did)          
     def remove_last_space(self, s) -> str:
         """
         Removes the trailing space from a string.

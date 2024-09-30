@@ -11,7 +11,7 @@ app = func.FunctionApp()
 logger = get_logger(__file__)
 
 # Define a scheduled Azure Function that runs every minute
-@app.schedule(schedule="*/30 * * * *", arg_name="myTimer", run_on_startup=False, use_monitor=False) 
+@app.schedule(schedule="*/30 * * * *", arg_name="myTimer", run_on_startup=True, use_monitor=False) 
 async def timer_trigger(myTimer: func.TimerRequest) -> None:
     """
     This function is triggered by a timer every minute. It loads a configuration file,
@@ -92,7 +92,5 @@ def run(api: HomgarApi, config):
                     # Check if the current temperature exceeds the maximum and handle it
                     logger.info(f"    + Checking max temperature for subdevice {subdevice.name}...")
                     api.is_max_temperature(config, subdevice)
-                    logger.info(f"    + Save in cache redis subdevice: {subdevice}")
-                    api.save_sensor(subdevice)
     except Exception as e:
         logger.error(f"An error occurred in the run function: {str(e)}")
